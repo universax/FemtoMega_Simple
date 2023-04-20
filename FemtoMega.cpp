@@ -1,8 +1,38 @@
 #include "FemtoMega.h"
-#include "NetworkUtilLibrary.h"
-
+#include "Util.h"
 
 bool FemtoMega::init(const std::vector<std::pair<std::string, int>>& input_ip_address_and_ports)
+{
+    initSensors(input_ip_address_and_ports);
+    initPointCloud();
+
+	return true;
+}
+
+void FemtoMega::update()
+{
+    updateColorDepth();
+    updatePointCloud();
+}
+
+void FemtoMega::draw()
+{
+    drawColorDepth();
+    drawPointcloud();
+}
+
+void FemtoMega::stop()
+{
+    // stop stream
+    std::cout << "stop stream" << std::endl;
+    for (auto&& pipeline : pipelines) {
+        pipeline->stop();
+    }
+}
+
+// Private -------------------
+// init
+bool FemtoMega::initSensors(const std::vector<std::pair<std::string, int>>& input_ip_address_and_ports)
 {
     // Setup devices
     for (std::pair<std::string, int> ip_address_and_port : input_ip_address_and_ports)
@@ -10,7 +40,7 @@ bool FemtoMega::init(const std::vector<std::pair<std::string, int>>& input_ip_ad
         // Check if ip address and port is valid
         std::string ip = ip_address_and_port.first;
         int port = ip_address_and_port.second;
-        if (!NetworkUtilLibrary::getInstance().isValidIPAddressAndPort(ip, port)) continue;
+        //if (!NetworkUtilLibrary::getInstance().isValidIPAddressAndPort(ip, port)) continue;
 
         // Create device
         std::shared_ptr<ob::Device> device = ctx.createNetDevice(ip.c_str(), port);
@@ -18,187 +48,227 @@ bool FemtoMega::init(const std::vector<std::pair<std::string, int>>& input_ip_ad
         devices.push_back(device);
 
         // Show device info from context
-        std::shared_ptr<ob::DeviceInfo> deviceInfo = device->getDeviceInfo();
-        if (!deviceInfo) {
-            std::cout << "Failed to get device info" << std::endl;
-        }
-        // Device name, pid, vid, uid, serial number, connection type
-        std::cout << "------------" << std::endl;
-        std::cout << "Device name: " << deviceInfo->name() << std::endl;
-        std::cout << "Device pid: " << deviceInfo->pid() << std::endl;
-        std::cout << "Device vid: " << deviceInfo->vid() << std::endl;
-        std::cout << "Device uid: " << deviceInfo->uid() << std::endl;
-        std::cout << "Device serial number: " << deviceInfo->serialNumber() << std::endl;
-        std::cout << "Device connection type: " << deviceInfo->connectionType() << std::endl;
-        std::cout << "------------" << std::endl;
-    }
+        showDeviceInfo(device);
 
-    // Memo
-    // for Sync
-    // 
-    // if you don't use configuration file, need these process
-    // 1. Load the configuration file and configure the device;
-    // 2. Reboot devices;
-    // 
-    // 3. Wait for all devices to reboot complete, start all devices's color and depth sensor to handle it frames;
-    
-    // 1. Load the configuration file and configure all devices
-    // 2. Reboot
-
-    // I don't know if this needed, becouse ctx returns no device if it's network one.
-    ctx.enableMultiDeviceSync(60000);
-    // 3. start all devices's color and depth sensor to handle it frames
-    for (int i = 0; i < devices.size(); i++)
-    {
-        // Set sync config
-        OBDeviceSyncConfig syncConfig;
-        if (i == 0)
-        {
-            syncConfig.syncMode = OBSyncMode::OB_SYNC_MODE_STANDALONE;
-		}
-		else
-		{
-            syncConfig.syncMode = OBSyncMode::OB_SYNC_MODE_STANDALONE;
-        }
+        //// Set sync config
+        //OBDeviceSyncConfig syncConfig;
+        //if (i == 0)
+        //{
+        //    syncConfig.syncMode = OBSyncMode::OB_SYNC_MODE_STANDALONE;
+        //}
+        //else
+        //{
+        //    syncConfig.syncMode = OBSyncMode::OB_SYNC_MODE_STANDALONE;
+        //}
         //devices[i]->setSyncConfig(syncConfig);
 
         // Setup pipeline
-        std::shared_ptr<ob::Pipeline> pipeline = std::make_shared<ob::Pipeline>(devices[i]);
-        if (!pipeline) {
-            std::cout << "Failed to create pipeline" << std::endl;
-            return false;
-        }
+        std::shared_ptr<ob::Pipeline> pipeline = std::make_shared<ob::Pipeline>(device);
         pipelines.push_back(pipeline);
-
-        // Setup config
-        std::shared_ptr<ob::Config> config = std::make_shared<ob::Config>();
-        if (!config) {
-            std::cout << "Failed to create config" << std::endl;
-            return false;
-        }
 
         // Depth
         // Setup depth profileList and depthProfile, if enable, set config enableStream
         std::shared_ptr<ob::StreamProfileList> depthProfileList = pipeline->getStreamProfileList(OB_SENSOR_DEPTH);
-        if (!depthProfileList) {
-            std::cout << "Failed to get depth profile list" << std::endl;
-            return false;
+        try
+        {
+            depthStreamProfile = depthProfileList->getVideoStreamProfile(320, 288, OBFormat::OB_FORMAT_Y16, 30);
         }
-        std::shared_ptr<ob::StreamProfile> depthProfile = depthProfileList->getProfile(0);
-        if (!depthProfile) {
-            std::cout << "Failed to get depth profile" << std::endl;
-            return false;
+        catch (const std::exception&)
+        {
+            depthStreamProfile = std::const_pointer_cast<ob::StreamProfile>(depthProfileList->getProfile(0))->as<ob::VideoStreamProfile>();
         }
-        config->enableStream(depthProfile);
-
+        // Add frame to array
+        depthFrames.push_back(nullptr);
+        depthMats.push_back(cv::Mat());
 
         // Color
         // Setup color profileList and colorProfile, if enable, set config enableStream
         std::shared_ptr<ob::StreamProfileList> colorProfileList = pipeline->getStreamProfileList(OB_SENSOR_COLOR);
-        if (!colorProfileList) {
-            std::cout << "Failed to get color profile list" << std::endl;
-            return false;
+        try
+        {
+            colorStreamProfile = colorProfileList->getVideoStreamProfile(1920, 1080, OBFormat::OB_FORMAT_H264, 30);
         }
-        std::shared_ptr<ob::StreamProfile> colorProfile = colorProfileList->getProfile(0);
-        if (!colorProfile) {
-            std::cout << "Failed to get color profile" << std::endl;
-            return false;
+        catch (const std::exception&)
+        {
+            colorStreamProfile = std::const_pointer_cast<ob::StreamProfile>(colorProfileList->getProfile(0))->as<ob::VideoStreamProfile>();
         }
-        config->enableStream(colorProfile);
+        // Add frame to array
+        colorFrames.push_back(nullptr);
+        colorMats.push_back(cv::Mat());
 
+
+        // Set Stream Profile
+        std::shared_ptr<ob::Config> config = std::make_shared<ob::Config>();
+        config->enableStream(depthStreamProfile);
+        config->enableStream(colorStreamProfile);
+
+        // Set Align Mode
+        config->setAlignMode(OBAlignMode::ALIGN_D2C_HW_MODE);
+        if (format == OBFormat::OB_FORMAT_POINT)
+        {
+            config->setAlignMode(OBAlignMode::ALIGN_DISABLE);
+        }
+
+        // Start pipeline
+        pipeline->start(config);
+    }
+    return true;
+}
+
+void FemtoMega::initPointCloud()
+{
+    // Create Point Cloud filter
+    pointcloudFilter = std::make_shared<ob::PointCloudFilter>();
+    const OBCameraParam cameraParameter = pipelines[0]->getCameraParam();
+    pointcloudFilter->setCameraParam(cameraParameter);
+    pointcloudFilter->setCreatePointFormat(format);
+    pointcloudFilter->setColorDataNormalization(true);
+
+    // Create PointCloud
+    pointcloud = std::make_shared<open3d::geometry::PointCloud>();
+
+    // Create visualizer
+    const int32_t width = 1280;
+    const int32_t height = 720;
+    visualizer.CreateVisualizerWindow("Open3D", width, height);
+    visualizer.RegisterKeyActionCallback(27,
+        [&](open3d::visualization::Visualizer* visualizer, int a, int b) {
+            return true;
+        }
+    );
+}
+
+// update
+void FemtoMega::updateColorDepth()
+{
+    for (size_t i = 0; i < pipelines.size(); i++)
+    {
+        std::shared_ptr<ob::Pipeline> pipeline = pipelines[i];
+
+        constexpr int32_t timeout = std::chrono::milliseconds(100).count();
+        frameset = pipeline->waitForFrames(timeout);
+
+        if (frameset == nullptr)
+        {
+            continue;
+        }
+
+        // Color
+        colorFrames[i] = frameset->colorFrame();
+        //
+        // Depth
+        depthFrames[i] = frameset->depthFrame();
+    }
+}
+
+void FemtoMega::updatePointCloud()
+{
+    // null check
+    if (frameset == nullptr)
+    {
+		return;
+	}
+    if (frameset->colorFrame() == nullptr || frameset->depthFrame() == nullptr)
+    {
+		return;
+	}
+
+    // Create Pointcloud from frameset
+    pointcloudFrame = pointcloudFilter->process(frameset);
+    if (pointcloudFrame == nullptr)
+    {
+		return;
+	}
+
+    // Create Pointcloud for Open3D
+    if (format == OBFormat::OB_FORMAT_RGB_POINT)
+    {
+        const int32_t numPoints = pointcloudFrame->dataSize() / sizeof(OBColorPoint);
+        OBColorPoint* data = reinterpret_cast<OBColorPoint*>(pointcloudFrame->data());
+
+        std::vector<Eigen::Vector3d> points = std::vector<Eigen::Vector3d>(numPoints);
+        std::vector<Eigen::Vector3d> colors = std::vector<Eigen::Vector3d>(numPoints);
+
+        for (int32_t i = 0; i < numPoints; i++)
+        {
+            points[i] = Eigen::Vector3d(data[i].x, data[i].y, data[i].z);
+            colors[i] = Eigen::Vector3d(data[i].r / 255.0, data[i].g / 255.0, data[i].b / 255.0);
+        }
+
+        pointcloud->points_ = points;
+        pointcloud->colors_ = colors;
+    }
+    else
+    {
+        const int32_t numPoints = pointcloudFrame->dataSize() / sizeof(OBPoint);
+        OBPoint* data = reinterpret_cast<OBPoint*>(pointcloudFrame->data());
+
+        std::vector<Eigen::Vector3d> points = std::vector<Eigen::Vector3d>(numPoints);
+
+#pragma omp parallel for
+        for (int32_t i = 0; i < numPoints; i++)
+        {
+            points[i] = Eigen::Vector3d(data[i].x, data[i].y, data[i].z);
+        }
+
+        pointcloud->points_ = points;
+    }
+}
+
+// draw
+void FemtoMega::drawColorDepth()
+{
+    for (size_t i = 0; i < pipelines.size(); i++)
+    {
+        // Depth
+        if (depthFrames[i] == nullptr)
+        {
+            continue;
+        }
+        depthMats[i] = ob::get_mat(depthFrames[i]);
+        if (!depthMats[i].empty()) cv::imshow("depth_" + std::to_string(i), depthMats[i]);
+
+        // Color
+        //if (colorFrames[i] == nullptr)
+        //{
+        //    continue;
+        //}
+        //colorMats[i] = ob::get_mat(colorFrames[i]);
+        //if (!colorMats[i].empty()) cv::imshow("color_" + std::to_string(i), colorMats[i]);
+    }
+}
+
+void FemtoMega::drawPointcloud()
+{
+    if (pointcloudFrame == nullptr)
+    {
+        return;
     }
 
-
-	return true;
-}
-
-void FemtoMega::start()
-{
-    // start stream
-    std::cout << "start stream" << std::endl;
-    startStream(devices, OB_SENSOR_COLOR, 0);
-    std::this_thread::sleep_for(std::chrono::milliseconds(500));
-    startStream(devices, OB_SENSOR_DEPTH, 0);
-    std::this_thread::sleep_for(std::chrono::milliseconds(500));
-}
-
-void FemtoMega::stop()
-{
-    // stop stream
-    std::cout << "stop stream" << std::endl;
-    stopStream(devices, OB_SENSOR_COLOR, 0);
-    stopStream(devices, OB_SENSOR_DEPTH, 0);
-}
-
-void FemtoMega::startStream(std::vector<std::shared_ptr<ob::Device>> devices, OBSensorType sensorType, int deviceIndexBase) {
-    for (auto&& dev : devices) {
-        // Get sensor list from device
-        auto sensorList = dev->getSensorList();
-        for (uint32_t i = 0; i < sensorList->count(); i++) {
-            auto sensor = sensorList->getSensor(i);
-            if (sensorType == sensor->type()) {
-                auto profiles = sensor->getStreamProfileList();
-                auto profile = profiles->getProfile(0);
-                switch (sensorType) {
-                case OB_SENSOR_DEPTH:
-                    if (profile) {
-                        sensor->start(profile, [this, deviceIndexBase](std::shared_ptr<ob::Frame> frame) { this->handleDepthStream(deviceIndexBase, frame); });
-                    }
-                    break;
-                case OB_SENSOR_COLOR:
-                    if (profile) {
-                        sensor->start(profile, [this, deviceIndexBase](std::shared_ptr<ob::Frame> frame) { this->handleColorStream(deviceIndexBase, frame); });
-                    }
-                    break;
-                default:
-                    break;
-                }
-            }
-        }
-        deviceIndexBase++;
+    if (!visualizer.HasGeometry())
+    {
+        visualizer.AddGeometry(pointcloud);
     }
+    visualizer.UpdateGeometry(pointcloud);
+    visualizer.PollEvents();
+    visualizer.UpdateRender();
 }
 
-void FemtoMega::stopStream(std::vector<std::shared_ptr<ob::Device>> devices, OBSensorType sensorType, int deviceIndexBase)
+// util
+void FemtoMega::showDeviceInfo(const std::shared_ptr<ob::Device> device)
 {
-    for (auto&& dev : devices) {
-        // Get sensor list from device
-        auto sensorList = dev->getSensorList();
-        for (uint32_t i = 0; i < sensorList->count(); i++) {
-            if (sensorList->type(i) == sensorType) {
-                sensorList->getSensor(i)->stop();
-                break;
-            }
-        }
+    std::shared_ptr<ob::DeviceInfo> deviceInfo = device->getDeviceInfo();
+    if (!deviceInfo) {
+        std::cout << "Failed to get device info" << std::endl;
     }
+    // Device name, pid, vid, uid, serial number, connection type
+    std::cout << "------------" << std::endl;
+    std::cout << "Device name: " << deviceInfo->name() << std::endl;
+    std::cout << "Device pid: " << deviceInfo->pid() << std::endl;
+    std::cout << "Device vid: " << deviceInfo->vid() << std::endl;
+    std::cout << "Device uid: " << deviceInfo->uid() << std::endl;
+    std::cout << "Device serial number: " << deviceInfo->serialNumber() << std::endl;
+    std::cout << "Device connection type: " << deviceInfo->connectionType() << std::endl;
+    std::cout << "------------" << std::endl;
 }
 
-// Callbacks
-void FemtoMega::handleColorStream(int devIndex, std::shared_ptr<ob::Frame> frame) {
-    std::lock_guard<std::mutex> lock(frameMutex);
-    std::cout << "Device#" << devIndex << ", color frame index=" << frame->index() << ", timestamp=" << frame->timeStamp()
-        << ", system timestamp=" << frame->systemTimeStamp() << std::endl;
-
-    //if (colorFrames[devIndex])
-    //{
-    //    colorFrames[devIndex] = frame;
-    //}
-    //else {
-    //    colorFrames.push_back(frame);
-    //}
-    
-}
-
-void FemtoMega::handleDepthStream(int devIndex, std::shared_ptr<ob::Frame> frame) {
-    std::lock_guard<std::mutex> lock(frameMutex);
-    std::cout << "Device#" << devIndex << ", depth frame index=" << frame->index() << ", timestamp=" << frame->timeStamp()
-        << ", system timestamp=" << frame->systemTimeStamp() << std::endl;
-
-    //if (depthFrames[devIndex])
-    //{
-    //    depthFrames[devIndex] = frame;
-    //}
-    //else {
-    //    depthFrames.push_back(frame);
-    //}
-}
