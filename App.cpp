@@ -31,13 +31,13 @@ void App::init() {
 
 void App::run() {
 	// Create femto mega device conncection info
-	std::vector <std::pair<std::string, int>> input_ip_address_and_ports;
+	std::vector <std::pair<std::string, int>> inputIpAddressAndPorts;
 	std::pair<std::string, int> ip_address_and_port_1("192.168.1.201", 8090);
-	input_ip_address_and_ports.push_back(ip_address_and_port_1);
-	//std::pair<std::string, int> ip_address_and_port_2("192.168.1.202", 8090);
-	//input_ip_address_and_ports.push_back(ip_address_and_port_2);
+	inputIpAddressAndPorts.push_back(ip_address_and_port_1);
+	std::pair<std::string, int> ip_address_and_port_2("192.168.1.202", 8090);
+	inputIpAddressAndPorts.push_back(ip_address_and_port_2);
 
-	_running = fm.init(input_ip_address_and_ports);
+	_running = fm.init(inputIpAddressAndPorts);
 
 	// main loop
 	while (_running)
@@ -49,14 +49,15 @@ void App::run() {
 
 		//std::this_thread::sleep_for(std::chrono::milliseconds(10));
 		fm.update();
+		//fm.process();
 		fm.draw();
 		// --------------------------------------------
 		// print framerate
 		tm.stop();
-		printf("FPS: %f \n", tm.getFPS());
+		//printf("FPS: %f \n", tm.getFPS());
 
 		// wait for key
-		handleKey((char)cv::waitKey(10));
+		handleKey((char)cv::waitKey(1));
 	}
 	fm.stop();
 }
@@ -67,6 +68,9 @@ void App::handleKey(char key)
 	switch (key) {
 	case 27:
 		_running = false;
+		break;
+	case 'r':
+		fm.registration();
 		break;
 	default:
 		break;

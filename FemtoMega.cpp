@@ -1,8 +1,11 @@
 #include "FemtoMega.h"
 #include "Util.h"
 
+#pragma region Public
 bool FemtoMega::init(const std::vector<std::pair<std::string, int>>& input_ip_address_and_ports)
 {
+    ob::Context::setLoggerSeverity(OB_LOG_SEVERITY_ERROR);
+
     initSensors(input_ip_address_and_ports);
     initPointCloud();
 
@@ -11,8 +14,14 @@ bool FemtoMega::init(const std::vector<std::pair<std::string, int>>& input_ip_ad
 
 void FemtoMega::update()
 {
+    updateFrameSet();
     updateColorDepth();
     updatePointCloud();
+}
+
+void FemtoMega::process()
+{
+    processPointCloud();
 }
 
 void FemtoMega::draw()
@@ -30,7 +39,19 @@ void FemtoMega::stop()
     }
 }
 
-// Private -------------------
+void FemtoMega::registration()
+{
+    for (auto p : pointclouds)
+    {
+        std::cout << "original pointcloud size: " << p->points_.size() << std::endl;
+    }
+    registrationPointcloud();
+}
+#pragma endregion
+
+#pragma region Private
+#pragma region Init
+// Private --------------------------------------
 // init
 bool FemtoMega::initSensors(const std::vector<std::pair<std::string, int>>& input_ip_address_and_ports)
 {
@@ -41,7 +62,6 @@ bool FemtoMega::initSensors(const std::vector<std::pair<std::string, int>>& inpu
         std::string ip = ip_address_and_port.first;
         int port = ip_address_and_port.second;
         //if (!NetworkUtilLibrary::getInstance().isValidIPAddressAndPort(ip, port)) continue;
-
         // Create device
         std::shared_ptr<ob::Device> device = ctx.createNetDevice(ip.c_str(), port);
         if (!device) continue;
@@ -77,8 +97,6 @@ bool FemtoMega::initSensors(const std::vector<std::pair<std::string, int>>& inpu
         {
             depthStreamProfile = std::const_pointer_cast<ob::StreamProfile>(depthProfileList->getProfile(0))->as<ob::VideoStreamProfile>();
         }
-        // Add frame to array
-        depthFrames.push_back(nullptr);
         depthMats.push_back(cv::Mat());
 
         // Color
@@ -92,10 +110,7 @@ bool FemtoMega::initSensors(const std::vector<std::pair<std::string, int>>& inpu
         {
             colorStreamProfile = std::const_pointer_cast<ob::StreamProfile>(colorProfileList->getProfile(0))->as<ob::VideoStreamProfile>();
         }
-        // Add frame to array
-        colorFrames.push_back(nullptr);
         colorMats.push_back(cv::Mat());
-
 
         // Set Stream Profile
         std::shared_ptr<ob::Config> config = std::make_shared<ob::Config>();
@@ -111,110 +126,133 @@ bool FemtoMega::initSensors(const std::vector<std::pair<std::string, int>>& inpu
 
         // Start pipeline
         pipeline->start(config);
+
+        
     }
     return true;
 }
 
 void FemtoMega::initPointCloud()
 {
-    // Create Point Cloud filter
-    pointcloudFilter = std::make_shared<ob::PointCloudFilter>();
-    const OBCameraParam cameraParameter = pipelines[0]->getCameraParam();
-    pointcloudFilter->setCameraParam(cameraParameter);
-    pointcloudFilter->setCreatePointFormat(format);
-    pointcloudFilter->setColorDataNormalization(true);
-
-    // Create PointCloud
-    pointcloud = std::make_shared<open3d::geometry::PointCloud>();
-
     // Create visualizer
     const int32_t width = 1280;
     const int32_t height = 720;
     visualizer.CreateVisualizerWindow("Open3D", width, height);
-    visualizer.RegisterKeyActionCallback(27,
-        [&](open3d::visualization::Visualizer* visualizer, int a, int b) {
-            return true;
-        }
-    );
-}
+    //visualizer.RegisterKeyActionCallback(27,
+    //    [&](open3d::visualization::Visualizer* visualizer, int a, int b) {
+    //        return true;
+    //    }
+    //);
 
-// update
-void FemtoMega::updateColorDepth()
-{
+    // Create Point Cloud filter
+    pointcloudFilters.clear();
     for (size_t i = 0; i < pipelines.size(); i++)
     {
-        std::shared_ptr<ob::Pipeline> pipeline = pipelines[i];
+        const OBCameraParam cameraParameter = pipelines[i]->getCameraParam();
+        std::shared_ptr<ob::PointCloudFilter> pointcloudFilter = std::make_shared<ob::PointCloudFilter>();
+        pointcloudFilter->setCameraParam(cameraParameter);
+        pointcloudFilter->setCreatePointFormat(format);
+        pointcloudFilter->setColorDataNormalization(true);
+        pointcloudFilters.push_back(pointcloudFilter);
 
+        // init other vals
+        std::shared_ptr < open3d::geometry::PointCloud> pointcloud = std::make_shared< open3d::geometry::PointCloud>();
+        pointclouds.push_back(pointcloud);
+    }
+}
+#pragma endregion
+
+#pragma region Update
+// update
+void FemtoMega::updateFrameSet()
+{
+    framesets.clear();
+    for (size_t i = 0; i < pipelines.size(); i++)
+    {
         constexpr int32_t timeout = std::chrono::milliseconds(100).count();
-        frameset = pipeline->waitForFrames(timeout);
+        framesets.push_back(pipelines[i]->waitForFrames(timeout));
+    }
+}
 
-        if (frameset == nullptr)
-        {
-            continue;
-        }
-
+void FemtoMega::updateColorDepth()
+{
+    colorFrames.clear();
+    depthFrames.clear();
+    for (size_t i = 0; i < framesets.size(); i++)
+    {
         // Color
-        colorFrames[i] = frameset->colorFrame();
-        //
+        colorFrames.push_back(framesets[i]->colorFrame());
         // Depth
-        depthFrames[i] = frameset->depthFrame();
+        depthFrames.push_back(framesets[i]->depthFrame());
     }
 }
 
 void FemtoMega::updatePointCloud()
 {
-    // null check
-    if (frameset == nullptr)
+    //visualizer.ClearGeometries();
+    for (size_t i = 0; i < pointcloudFilters.size(); i++)
     {
-		return;
-	}
-    if (frameset->colorFrame() == nullptr || frameset->depthFrame() == nullptr)
-    {
-		return;
-	}
-
-    // Create Pointcloud from frameset
-    pointcloudFrame = pointcloudFilter->process(frameset);
-    if (pointcloudFrame == nullptr)
-    {
-		return;
-	}
-
-    // Create Pointcloud for Open3D
-    if (format == OBFormat::OB_FORMAT_RGB_POINT)
-    {
-        const int32_t numPoints = pointcloudFrame->dataSize() / sizeof(OBColorPoint);
-        OBColorPoint* data = reinterpret_cast<OBColorPoint*>(pointcloudFrame->data());
-
-        std::vector<Eigen::Vector3d> points = std::vector<Eigen::Vector3d>(numPoints);
-        std::vector<Eigen::Vector3d> colors = std::vector<Eigen::Vector3d>(numPoints);
-
-        for (int32_t i = 0; i < numPoints; i++)
+        // null check
+        if (framesets[i] == nullptr)
         {
-            points[i] = Eigen::Vector3d(data[i].x, data[i].y, data[i].z);
-            colors[i] = Eigen::Vector3d(data[i].r / 255.0, data[i].g / 255.0, data[i].b / 255.0);
+            continue;
+        }
+        if (framesets[i]->colorFrame() == nullptr || framesets[i]->depthFrame() == nullptr)
+        {
+            continue;
         }
 
-        pointcloud->points_ = points;
-        pointcloud->colors_ = colors;
+        // Create Pointcloud from frameset
+        std::shared_ptr<ob::Frame> pointcloudFrame = pointcloudFilters[i]->process(framesets[i]);
+
+        // Create Pointcloud for Open3D
+        if (format == OBFormat::OB_FORMAT_RGB_POINT)
+        {
+            const int32_t numPoints = pointcloudFrame->dataSize() / sizeof(OBColorPoint);
+            OBColorPoint* data = reinterpret_cast<OBColorPoint*>(pointcloudFrame->data());
+
+            std::vector<Eigen::Vector3d> points = std::vector<Eigen::Vector3d>(numPoints);
+            std::vector<Eigen::Vector3d> colors = std::vector<Eigen::Vector3d>(numPoints);
+
+            for (int32_t i = 0; i < numPoints; i++)
+            {
+                points[i] = Eigen::Vector3d(data[i].x, data[i].y, data[i].z);
+                colors[i] = Eigen::Vector3d(data[i].r / 255.0, data[i].g / 255.0, data[i].b / 255.0);
+            }
+
+            pointclouds[i]->points_ = points;
+            pointclouds[i]->colors_ = colors;
+        }
+        else
+        {
+            const int32_t numPoints = pointcloudFrame->dataSize() / sizeof(OBPoint);
+            OBPoint* data = reinterpret_cast<OBPoint*>(pointcloudFrame->data());
+
+            std::vector<Eigen::Vector3d> points = std::vector<Eigen::Vector3d>(numPoints);
+
+            #pragma omp parallel for
+            for (int32_t i = 0; i < numPoints; i++)
+            {
+                points[i] = Eigen::Vector3d(data[i].x, data[i].y, data[i].z);
+            }
+
+            pointclouds[i]->points_ = points;
+        }
+        //pointclouds.push_back(pointcloud);
+        
     }
-    else
+
+    if (!visualizer.HasGeometry())
     {
-        const int32_t numPoints = pointcloudFrame->dataSize() / sizeof(OBPoint);
-        OBPoint* data = reinterpret_cast<OBPoint*>(pointcloudFrame->data());
-
-        std::vector<Eigen::Vector3d> points = std::vector<Eigen::Vector3d>(numPoints);
-
-#pragma omp parallel for
-        for (int32_t i = 0; i < numPoints; i++)
+        for (size_t i = 0; i < pointclouds.size(); i++)
         {
-            points[i] = Eigen::Vector3d(data[i].x, data[i].y, data[i].z);
+            visualizer.AddGeometry(pointclouds[i]);
         }
-
-        pointcloud->points_ = points;
     }
 }
+#pragma endregion
 
+#pragma region Draw
 // draw
 void FemtoMega::drawColorDepth()
 {
@@ -240,18 +278,62 @@ void FemtoMega::drawColorDepth()
 
 void FemtoMega::drawPointcloud()
 {
-    if (pointcloudFrame == nullptr)
+    for (size_t i = 0; i < pointclouds.size(); i++)
     {
-        return;
+        std::cout << "P[" << i << "] size: " << pointclouds[i]->points_.size() << std::endl;
+        pointclouds[i] = pointclouds[i]->VoxelDownSample(0.1);
+        std::cout << "P[" << i << "] size: " << pointclouds[i]->points_.size() << std::endl;
+        visualizer.UpdateGeometry(pointclouds[i]);
     }
-
-    if (!visualizer.HasGeometry())
-    {
-        visualizer.AddGeometry(pointcloud);
-    }
-    visualizer.UpdateGeometry(pointcloud);
+    
     visualizer.PollEvents();
     visualizer.UpdateRender();
+}
+#pragma endregion
+
+#pragma region Process
+// process
+void FemtoMega::processPointCloud()
+{
+	//// registration
+	//registrationPointcloud();
+}
+
+void FemtoMega::registrationPointcloud()
+{
+    // prepare
+    // get downsampled pointcloud and FPFHFeature from that
+    //double voxelSize = 0.2;
+    //std::pair<std::shared_ptr<open3d::geometry::PointCloud>, std::shared_ptr<open3d::pipelines::registration::Feature>> srcPcdAndFeatuer, targetPcdAndFeature;
+    //srcPcdAndFeatuer = calcFPFHFeature(pointclouds[0], voxelSize);
+    //targetPcdAndFeature = calcFPFHFeature(pointclouds[1], voxelSize);
+    //std::shared_ptr<open3d::geometry::PointCloud> srcPcdDownSampled = srcPcdAndFeatuer.first;
+    //std::shared_ptr<open3d::geometry::PointCloud> targetPcdDownSampled = targetPcdAndFeature.first;
+    //std::shared_ptr<open3d::pipelines::registration::Feature> srcFpfhFeature = srcPcdAndFeatuer.second;
+    //std::shared_ptr<open3d::pipelines::registration::Feature> targetFpfhFeature = targetPcdAndFeature.second;
+
+    //std::cout << "src downsampled pointcloud size: " << srcPcdDownSampled->points_.size() << std::endl;
+    //std::cout << "target downsampled pointcloud size: " << targetPcdDownSampled->points_.size() << std::endl;
+
+    //// global registration with RANSAC
+    //open3d::pipelines::registration::RegistrationResult resultRANSAC = calcGlobalRegistration(
+    //    srcPcdDownSampled,
+    //    targetPcdDownSampled,
+    //    srcFpfhFeature,
+    //    targetFpfhFeature,
+    //    voxelSize
+    //);
+    //std::cout << "::RANSAC result" << std::endl;
+    //std::cout << resultRANSAC.transformation_ << std::endl;
+
+ //   // refine registration with ICP
+ //   open3d::pipelines::registration::RegistrationResult resultICP = calcRefineRegistration(
+ //       pointclouds[0],
+ //       pointclouds[1],
+ //       resultRANSAC,
+	//	voxelSize
+	//);
+ //   std::cout << resultICP.transformation_ << std::endl;
 }
 
 // util
@@ -272,3 +354,71 @@ void FemtoMega::showDeviceInfo(const std::shared_ptr<ob::Device> device)
     std::cout << "------------" << std::endl;
 }
 
+std::pair<std::shared_ptr<open3d::geometry::PointCloud>, std::shared_ptr<open3d::pipelines::registration::Feature>> FemtoMega::calcFPFHFeature(std::shared_ptr<open3d::geometry::PointCloud> pointcloud, double voxelSize)
+{
+    std::shared_ptr<open3d::geometry::PointCloud> pointcloudDown = pointcloud->VoxelDownSample(voxelSize);
+
+    double radiusNormal = voxelSize * 2;
+    std::cout << ":: Estimate normal with search radius " << radiusNormal << std::endl;
+    pointcloudDown->EstimateNormals(
+        open3d::geometry::KDTreeSearchParamHybrid(radiusNormal, 30)
+    );
+
+    double radiusFeature = voxelSize * 5;
+    std::cout << ":: Compute FPFH feature with search radius " << radiusFeature << std::endl;
+    std::shared_ptr<open3d::pipelines::registration::Feature> fpfhFeature = open3d::pipelines::registration::ComputeFPFHFeature(
+        *pointcloudDown,
+        open3d::geometry::KDTreeSearchParamHybrid(radiusFeature, 100)
+    );
+
+    return std::pair<std::shared_ptr<open3d::geometry::PointCloud>, std::shared_ptr < open3d::pipelines::registration::Feature>>(pointcloudDown, fpfhFeature);
+}
+
+open3d::pipelines::registration::RegistrationResult FemtoMega::calcGlobalRegistration(std::shared_ptr<open3d::geometry::PointCloud> sourcePcd, std::shared_ptr<open3d::geometry::PointCloud> targetPcd, std::shared_ptr<open3d::pipelines::registration::Feature> sourceFpfh, std::shared_ptr<open3d::pipelines::registration::Feature> targetFpfh, double voxelSize)
+{
+    double distanceThr = voxelSize * 1.5;
+    std::cout << ":: RANSAC registration on downsampled pointclouds" << std::endl;
+    std::cout << "          Since the downsampling voxel size is " << voxelSize << std::endl;
+    std::cout << "          se use a liberal distance threshold " << distanceThr << std::endl;
+
+    open3d::pipelines::registration::CorrespondenceCheckerBasedOnDistance distanceChecker(0.9);
+    open3d::pipelines::registration::CorrespondenceCheckerBasedOnEdgeLength edgeLengthChecker(distanceThr);
+
+    std::vector<std::reference_wrapper<const open3d::pipelines::registration::CorrespondenceChecker>> correspondenceCheckers {
+		std::cref(distanceChecker),
+        std::cref(edgeLengthChecker)
+	};
+
+    open3d::pipelines::registration::RegistrationResult resutl = open3d::pipelines::registration::RegistrationRANSACBasedOnFeatureMatching(
+        *sourcePcd,
+        *targetPcd,
+        *sourceFpfh,
+        *targetFpfh,
+        true,
+        distanceThr,
+        open3d::pipelines::registration::TransformationEstimationPointToPoint(false),
+        3,
+        correspondenceCheckers,
+        open3d::pipelines::registration::RANSACConvergenceCriteria(100000, 0.999)
+    );
+    return resutl;
+}
+
+open3d::pipelines::registration::RegistrationResult FemtoMega::calcRefineRegistration(std::shared_ptr<open3d::geometry::PointCloud> sourcePcd, std::shared_ptr<open3d::geometry::PointCloud> targetPcd, open3d::pipelines::registration::RegistrationResult resultRANSAC, double voxelSize)
+{
+    double distanceThr = voxelSize * 0.4;
+    std::cout << ":: Point-to-plane ICP registration is applied on original point" << std::endl;
+    std::cout << "          clouds to rrefine the alignment. This time we use a strict" << std::endl;
+    std::cout << "          distance threshold " << distanceThr << std::endl;
+    open3d::pipelines::registration::RegistrationResult resutl = open3d::pipelines::registration::RegistrationICP(
+        *sourcePcd,
+        *targetPcd,
+        distanceThr,
+        resultRANSAC.transformation_,
+        open3d::pipelines::registration::TransformationEstimationPointToPlane()
+    );
+
+    return resutl;
+}
+#pragma endregion
+#pragma endregion

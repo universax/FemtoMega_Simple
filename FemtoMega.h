@@ -11,6 +11,7 @@
 #include <vector>
 #include <chrono>
 #include <stdexcept>
+#include <functional>
 
 // Open3D
 #include <open3d/Open3D.h>
@@ -34,18 +35,26 @@ public:
 	void draw();
 	void stop();
 
+	void process();
+	void registration();
+
 private:
 	// init
 	bool initSensors(const std::vector<std::pair<std::string, int>>& ipAddressAndPorts);
 	void initPointCloud();
 
 	// update
+	void updateFrameSet();
 	void updateColorDepth();
 	void updatePointCloud();
 
 	// draw
 	void drawColorDepth();
 	void drawPointcloud();
+
+	// process
+	void processPointCloud();
+	void registrationPointcloud();
 
 	// Util
 	void showDeviceInfo(const std::shared_ptr<ob::Device> device);
@@ -57,7 +66,7 @@ private:
 	std::vector<std::shared_ptr<ob::Pipeline>> pipelines;
 
 	// Frameset
-	std::shared_ptr<ob::FrameSet> frameset = nullptr;
+	std::vector<std::shared_ptr<ob::FrameSet>> framesets;
 
 	// Stream profile
 	std::shared_ptr<ob::VideoStreamProfile> depthStreamProfile = nullptr;
@@ -72,10 +81,13 @@ private:
 
 	// Open3D
 	OBFormat format = OBFormat::OB_FORMAT_POINT;
-	std::shared_ptr<ob::PointCloudFilter> pointcloudFilter;
-	std::shared_ptr<ob::Frame> pointcloudFrame = nullptr;
-	std::shared_ptr<open3d::geometry::PointCloud> pointcloud = nullptr;
-	open3d::visualization::VisualizerWithKeyCallback visualizer;
+	std::vector<std::shared_ptr<ob::PointCloudFilter>> pointcloudFilters;
+	std::vector<std::shared_ptr<open3d::geometry::PointCloud>> pointclouds;
+	open3d::visualization::Visualizer visualizer;
 
+	// Registration	
+	std::pair<std::shared_ptr<open3d::geometry::PointCloud>, std::shared_ptr<open3d::pipelines::registration::Feature>> calcFPFHFeature(std::shared_ptr<open3d::geometry::PointCloud> pointcloud, double voxelSize);
+	open3d::pipelines::registration::RegistrationResult calcGlobalRegistration(std::shared_ptr<open3d::geometry::PointCloud> sourcePcd, std::shared_ptr<open3d::geometry::PointCloud> targetPcd, std::shared_ptr<open3d::pipelines::registration::Feature> sourceFpfh, std::shared_ptr<open3d::pipelines::registration::Feature> targetFpfh, double voxelSize);
+	open3d::pipelines::registration::RegistrationResult calcRefineRegistration(std::shared_ptr<open3d::geometry::PointCloud> sourcePcd, std::shared_ptr<open3d::geometry::PointCloud> targetPcd, open3d::pipelines::registration::RegistrationResult resultRANSAC, double voxelSize);
 };
 
