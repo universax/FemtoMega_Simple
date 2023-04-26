@@ -104,14 +104,14 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>$(OpenCV_DIR)\include;$(SolutionDir)OrbbecSDK\include;$(Open3D_DIR)\debug\include;$(Open3D_DIR)\debug\include\open3D\3rdparty;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(OpenCV_DIR)\include;$(SolutionDir)OrbbecSDK\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <OpenMPSupport>true</OpenMPSupport>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalLibraryDirectories>$(OpenCV_DIR)\x64\vc17\lib;$(SolutionDir)OrbbecSDK\lib;$(Open3D_DIR)\debug\lib</AdditionalLibraryDirectories>
-      <AdditionalDependencies>opencv_world470d.lib;OrbbecSDK.lib;Ws2_32.lib;Open3D.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalLibraryDirectories>$(OpenCV_DIR)\x64\vc17\lib;$(SolutionDir)OrbbecSDK\lib</AdditionalLibraryDirectories>
+      <AdditionalDependencies>opencv_world470d.lib;OrbbecSDK.lib;Ws2_32.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
@@ -122,7 +122,7 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>$(OpenCV_DIR)\include;$(SolutionDir)OrbbecSDK\include;$(Open3D_DIR)\release\include;$(Open3D_DIR)\release\include\open3D\3rdparty;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(OpenCV_DIR)\include;$(SolutionDir)OrbbecSDK\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <OpenMPSupport>true</OpenMPSupport>
       <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
     </ClCompile>
@@ -131,8 +131,8 @@
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalLibraryDirectories>$(OpenCV_DIR)\x64\vc17\lib;$(SolutionDir)OrbbecSDK\lib;$(Open3D_DIR)\release\lib</AdditionalLibraryDirectories>
-      <AdditionalDependencies>opencv_world470.lib;OrbbecSDK.lib;Ws2_32.lib;Open3D.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalLibraryDirectories>$(OpenCV_DIR)\x64\vc17\lib;$(SolutionDir)OrbbecSDK\lib</AdditionalLibraryDirectories>
+      <AdditionalDependencies>opencv_world470.lib;OrbbecSDK.lib;Ws2_32.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>

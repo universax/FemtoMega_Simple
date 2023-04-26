@@ -13,9 +13,6 @@
 #include <stdexcept>
 #include <functional>
 
-// Open3D
-#include <open3d/Open3D.h>
-
 // CV
 #include "opencv2/highgui/highgui.hpp"
 #include "opencv2/core/core.hpp"
@@ -79,15 +76,8 @@ private:
 	// CV
 	std::vector<cv::Mat> colorMats, depthMats; 
 
-	// Open3D
+	// Pointcloud
 	OBFormat format = OBFormat::OB_FORMAT_POINT;
 	std::vector<std::shared_ptr<ob::PointCloudFilter>> pointcloudFilters;
-	std::vector<std::shared_ptr<open3d::geometry::PointCloud>> pointclouds;
-	open3d::visualization::Visualizer visualizer;
-
-	// Registration	
-	std::pair<std::shared_ptr<open3d::geometry::PointCloud>, std::shared_ptr<open3d::pipelines::registration::Feature>> calcFPFHFeature(std::shared_ptr<open3d::geometry::PointCloud> pointcloud, double voxelSize);
-	open3d::pipelines::registration::RegistrationResult calcGlobalRegistration(std::shared_ptr<open3d::geometry::PointCloud> sourcePcd, std::shared_ptr<open3d::geometry::PointCloud> targetPcd, std::shared_ptr<open3d::pipelines::registration::Feature> sourceFpfh, std::shared_ptr<open3d::pipelines::registration::Feature> targetFpfh, double voxelSize);
-	open3d::pipelines::registration::RegistrationResult calcRefineRegistration(std::shared_ptr<open3d::geometry::PointCloud> sourcePcd, std::shared_ptr<open3d::geometry::PointCloud> targetPcd, open3d::pipelines::registration::RegistrationResult resultRANSAC, double voxelSize);
 };
 
