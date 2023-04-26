@@ -104,14 +104,16 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>$(OpenCV_DIR)\include;$(SolutionDir)OrbbecSDK\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(OpenCV_DIR)\include;$(SolutionDir)PCL_Functions;$(SolutionDir)PCL_Visualizer;$(SolutionDir)OrbbecSDK\include;$(PCL_INCLUDE)\pcl-1.13;$(PCL_DIR)\3rdParty\Boost\include\boost-1_80;$(PCL_DIR)\3rdParty\Eigen\eigen3;$(PCL_DIR)\3rdParty\VTK\include\vtk-9.2;$(PCL_DIR)\3rdParty\FLANN\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <OpenMPSupport>true</OpenMPSupport>
+      <PrecompiledHeader>Use</PrecompiledHeader>
+      <ForcedIncludeFiles>stdafx.h</ForcedIncludeFiles>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalLibraryDirectories>$(OpenCV_DIR)\x64\vc17\lib;$(SolutionDir)OrbbecSDK\lib</AdditionalLibraryDirectories>
-      <AdditionalDependencies>opencv_world470d.lib;OrbbecSDK.lib;Ws2_32.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalLibraryDirectories>$(OpenCV_DIR)\x64\vc17\lib;$(SolutionDir)OrbbecSDK\lib;$(PCL_LIB);$(PCL_DIR)\3rdParty\Boost\lib;$(PCL_DIR)\3rdParty\FLANN\lib;$(PCL_DIR)\3rdParty\Qhull\lib;$(PCL_DIR)\3rdParty\VTK\lib</AdditionalLibraryDirectories>
+      <AdditionalDependencies>opencv_world470d.lib;OrbbecSDK.lib;Ws2_32.lib;pcl_commond.lib;pcl_featuresd.lib;pcl_filtersd.lib;pcl_iod.lib;pcl_io_plyd.lib;pcl_kdtreed.lib;pcl_keypointsd.lib;pcl_mld.lib;pcl_octreed.lib;pcl_outofcored.lib;pcl_peopled.lib;pcl_recognitiond.lib;pcl_registrationd.lib;pcl_sample_consensusd.lib;pcl_searchd.lib;pcl_segmentationd.lib;pcl_stereod.lib;pcl_surfaced.lib;pcl_trackingd.lib;pcl_visualizationd.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
@@ -122,17 +124,19 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>$(OpenCV_DIR)\include;$(SolutionDir)OrbbecSDK\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(OpenCV_DIR)\include;$(SolutionDir)PCL_Functions;$(SolutionDir)PCL_Visualizer;$(SolutionDir)OrbbecSDK\include;$(PCL_INCLUDE)\pcl-1.13;$(PCL_DIR)\3rdParty\Boost\include\boost-1_80;$(PCL_DIR)\3rdParty\Eigen\eigen3;$(PCL_DIR)\3rdParty\VTK\include\vtk-9.2;$(PCL_DIR)\3rdParty\FLANN\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <OpenMPSupport>true</OpenMPSupport>
       <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
+      <PrecompiledHeader>Use</PrecompiledHeader>
+      <ForcedIncludeFiles>stdafx.h</ForcedIncludeFiles>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalLibraryDirectories>$(OpenCV_DIR)\x64\vc17\lib;$(SolutionDir)OrbbecSDK\lib</AdditionalLibraryDirectories>
-      <AdditionalDependencies>opencv_world470.lib;OrbbecSDK.lib;Ws2_32.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalLibraryDirectories>$(OpenCV_DIR)\x64\vc17\lib;$(SolutionDir)OrbbecSDK\lib;$(PCL_LIB);$(PCL_DIR)\3rdParty\Boost\lib;$(PCL_DIR)\3rdParty\FLANN\lib;$(PCL_DIR)\3rdParty\Qhull\lib;$(PCL_DIR)\3rdParty\VTK\lib</AdditionalLibraryDirectories>
+      <AdditionalDependencies>opencv_world470.lib;OrbbecSDK.lib;Ws2_32.lib;pcl_common.lib;pcl_features.lib;pcl_filters.lib;pcl_io.lib;pcl_io_ply.lib;pcl_kdtree.lib;pcl_keypoints.lib;pcl_ml.lib;pcl_octree.lib;pcl_outofcore.lib;pcl_people.lib;pcl_recognition.lib;pcl_registration.lib;pcl_sample_consensus.lib;pcl_search.lib;pcl_segmentation.lib;pcl_stereo.lib;pcl_surface.lib;pcl_tracking.lib;pcl_visualization.lib;libboost_thread-vc143-mt-x64-1_80.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
@@ -140,12 +144,23 @@
     <ClCompile Include="FemtoMega.cpp" />
     <ClCompile Include="FemtoMega_Simple.cpp" />
     <ClCompile Include="NetworkUtilLibrary.cpp" />
+    <ClCompile Include="PCL_Functions\PCL_Functions.cpp" />
+    <ClCompile Include="PCL_Visualizer\VisualizerManager.cpp" />
+    <ClCompile Include="stdafx.cpp">
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Create</PrecompiledHeader>
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Create</PrecompiledHeader>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="App.h" />
     <ClInclude Include="FemtoMega.h" />
     <ClInclude Include="NetworkUtilLibrary.h" />
+    <ClInclude Include="PCL_Functions\PCL_Functions.h" />
+    <ClInclude Include="PCL_Functions\Sensor.h" />
+    <ClInclude Include="PCL_Functions\Typedef.h" />
+    <ClInclude Include="PCL_Visualizer\VisualizerManager.h" />
     <ClInclude Include="Singleton.h" />
+    <ClInclude Include="stdafx.h" />
     <ClInclude Include="Util.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

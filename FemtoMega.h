@@ -2,17 +2,6 @@
 #include "libobsensor/ObSensor.hpp"
 #include "libobsensor/hpp/Error.hpp"
 
-// std
-#include <thread>
-#include <mutex>
-#include <iostream>
-#include <sstream>
-#include <string>
-#include <vector>
-#include <chrono>
-#include <stdexcept>
-#include <functional>
-
 // CV
 #include "opencv2/highgui/highgui.hpp"
 #include "opencv2/core/core.hpp"
