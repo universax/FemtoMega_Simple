@@ -1,35 +1,8 @@
 #include "App.h"
-
-// std
-#include <thread>
-#include <mutex>
-#include <iostream>
-#include <sstream>
-#include <string>
-#include <vector>
-
-// CV
-#include <opencv2/highgui/highgui.hpp>
-#include <opencv2/core/core.hpp>
-
+#include "PCL_Functions.h"
+#include "VisualizerManager.h"
 
 void App::init() {
-	//// Check all devices on the network
-	//try {
-	//	std::vector<std::pair<std::string, std::string>> device_info = NetworkUtilLibrary::getInstance().listDeviceIDsAndIPsOnLAN();
-	//	std::cout << "Found " << device_info.size() << " devices on the network." << std::endl;
-	//	for (const auto& i : device_info) {
-	//		std::cout << "Found device ID: " << i.first << " with IP address: " << i.second << std::endl;
-	//	}
-	//}
-	//catch (const std::runtime_error& e) {
-	//	std::cerr << "Error: " << e.what() << std::endl;
-	//}
-
-	
-}
-
-void App::run() {
 	// Create femto mega device conncection info
 	std::vector <std::pair<std::string, int>> inputIpAddressAndPorts;
 	std::pair<std::string, int> ip_address_and_port_1("192.168.1.201", 8090);
@@ -38,7 +11,14 @@ void App::run() {
 	inputIpAddressAndPorts.push_back(ip_address_and_port_2);
 
 	_running = fm.init(inputIpAddressAndPorts);
+}
 
+void App::run() {
+	// Visualizer
+	VisualizerManager vm;
+
+	// Registration flag
+	bool isRegisterd = false;
 	// main loop
 	while (_running)
 	{
@@ -46,11 +26,46 @@ void App::run() {
 		cv::TickMeter tm;
 		tm.start();
 		// --------------------------------------------
-
-		//std::this_thread::sleep_for(std::chrono::milliseconds(10));
 		fm.update();
-		//fm.process();
-		fm.draw();
+
+		{
+			// Check running
+			_running = vm.running;
+
+			// Get pointclouds
+			std::vector<pcl::PointCloud<PointType>::Ptr> pointclouds = fm.getPointclouds();
+			if (pointclouds.empty()) continue;
+
+			// Filter
+			for (size_t i = 0; i < pointclouds.size(); i++)
+			{
+				PCL_Functions::voxelGridFilter(0.01f, pointclouds[i]);
+			}
+
+			// Registration
+			if (pointclouds.size() > 1 && !vm.registration)
+			{
+				pcl::PointCloud<PointType>::Ptr srcPcd = pointclouds[0];
+				for (size_t i = 1; i < pointclouds.size(); i++)
+				{
+					pcl::PointCloud<PointType>::Ptr tgtPcd = pointclouds[i];
+					Eigen::Matrix4f icpResult = PCL_Functions::iterativeClosestPoint(tgtPcd, srcPcd);
+					PCL_Functions::transform(tgtPcd, icpResult);
+				}
+
+				vm.registration = true;
+			}
+
+			// Marge and draw
+			pcl::PointCloud<PointType>::Ptr mergedPcd(new pcl::PointCloud<PointType>);
+			for (size_t i = 0; i < pointclouds.size(); i++)
+			{
+				PCL_Functions::voxelGridFilter(0.02f, pointclouds[i]);
+				*mergedPcd += *pointclouds[i];
+			}
+			vm.updateVisualizer(mergedPcd);
+		}
+
 		// --------------------------------------------
 		// print framerate
 		tm.stop();
@@ -70,7 +85,7 @@ void App::handleKey(char key)
 		_running = false;
 		break;
 	case 'r':
-		fm.registration();
+		
 		break;
 	default:
 		break;

@@ -10,8 +10,11 @@
 #include <stdexcept>
 #include <functional>
 
-//Boost
+// CV
+#include <opencv2/highgui/highgui.hpp>
+#include <opencv2/core/core.hpp>
 
+//Boost
 #include <boost/array.hpp>
 #include <boost/asio.hpp>
 #include <boost/bind.hpp>
@@ -51,5 +54,5 @@
 #include <pcl/keypoints/harris_2d.h>
 
 
-
+// Typedef
 #include "Typedef.h"

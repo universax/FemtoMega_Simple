@@ -5,7 +5,9 @@ class App
 {
 public:
 	App() {}
-	~App() {}
+	~App() {
+		fm.stop();
+	}
 
 	void init();
 	void run();
