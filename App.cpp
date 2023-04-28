@@ -17,8 +17,9 @@ void App::run() {
 	// Visualizer
 	VisualizerManager vm;
 
-	// Registration flag
-	bool isRegisterd = false;
+	// Registration
+	std::vector<Eigen::Matrix4f> icpResults;
+
 	// main loop
 	while (_running)
 	{
@@ -37,30 +38,53 @@ void App::run() {
 			if (pointclouds.empty()) continue;
 
 			// Filter
+			float defaultVoxelSize = 0.01f;
 			for (size_t i = 0; i < pointclouds.size(); i++)
 			{
-				PCL_Functions::voxelGridFilter(0.01f, pointclouds[i]);
+				PCL_Functions::voxelGridFilter(defaultVoxelSize, pointclouds[i]);
 			}
 
+			// Pre-Transform
+
+
 			// Registration
-			if (pointclouds.size() > 1 && !vm.registration)
+			if (pointclouds.size() > 1 && icpResults.empty())
 			{
-				pcl::PointCloud<PointType>::Ptr srcPcd = pointclouds[0];
-				for (size_t i = 1; i < pointclouds.size(); i++)
+				pcl::PointCloud<PointType>::Ptr tgtPcd = pointclouds[0]; // this cloud is base
+				// calc target pointcloud's transfrom
+				for (size_t i = 0; i < pointclouds.size(); i++)
 				{
-					pcl::PointCloud<PointType>::Ptr tgtPcd = pointclouds[i];
+					pcl::PointCloud<PointType>::Ptr srcPcd = pointclouds[i];
 					Eigen::Matrix4f icpResult = PCL_Functions::iterativeClosestPoint(tgtPcd, srcPcd);
-					PCL_Functions::transform(tgtPcd, icpResult);
+					icpResults.push_back(icpResult);
 				}
 
 				vm.registration = true;
 			}
 
+			// Transfrom
+			if (icpResults.size() > 1)
+			{
+				pcl::PointCloud<PointType>::Ptr transformedPcd(new pcl::PointCloud<PointType>);
+				for (size_t i = 1; i < pointclouds.size(); i++)
+				{
+					PCL_Functions::transform(pointclouds[i], icpResults[i]);
+				}
+			}
+
+			//// Plane removal
+			//for (size_t i = 0; i < pointclouds.size(); i++)
+			//{
+			//	PCL_Functions::planeRemoval(pointclouds[i], defaultVoxelSize * 5);
+			//}
+
+
 			// Marge and draw
 			pcl::PointCloud<PointType>::Ptr mergedPcd(new pcl::PointCloud<PointType>);
 			for (size_t i = 0; i < pointclouds.size(); i++)
 			{
-				PCL_Functions::voxelGridFilter(0.02f, pointclouds[i]);
+				PCL_Functions::voxelGridFilter(0.03f, pointclouds[i]);
+
 				*mergedPcd += *pointclouds[i];
 			}
 			vm.updateVisualizer(mergedPcd);

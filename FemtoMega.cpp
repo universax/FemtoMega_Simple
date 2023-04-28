@@ -76,7 +76,7 @@ bool FemtoMega::initSensors(const std::vector<std::pair<std::string, int>>& inpu
         std::shared_ptr<ob::StreamProfileList> depthProfileList = pipeline->getStreamProfileList(OB_SENSOR_DEPTH);
         try
         {
-            depthStreamProfile = depthProfileList->getVideoStreamProfile(320, 288, OBFormat::OB_FORMAT_Y16, 30);
+            depthStreamProfile = depthProfileList->getVideoStreamProfile(640/2, 576/2, OBFormat::OB_FORMAT_Y16, 30);
         }
         catch (const std::exception&)
         {
@@ -189,7 +189,7 @@ void FemtoMega::updatePointCloud()
             const int32_t numPoints = pointcloudFrame->dataSize() / sizeof(OBPoint);
             OBPoint* data = reinterpret_cast<OBPoint*>(pointcloudFrame->data());
 
-            srand(i*100);
+            srand((i+1)*200);
             int32_t r = rand() % 256;
             int32_t g = rand() % 256;
             int32_t b = rand() % 256;
