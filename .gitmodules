@@ -1,0 +1,6 @@
+[submodule "PCL_Functions"]
+	path = PCL_Functions
+	url = https://github.com/universax/PCL_Functions.git
+[submodule "PCL_Visualizer"]
+	path = PCL_Visualizer
+	url = https://github.com/universax/PCL_Visualizer.git

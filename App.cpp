@@ -1,51 +1,25 @@
 #include "App.h"
-#include "NetworkUtilLibrary.h"
-
-// std
-#include <thread>
-#include <mutex>
-#include <iostream>
-#include <sstream>
-#include <string>
-#include <vector>
-
-// CV
-#include <opencv2/highgui/highgui.hpp>
-#include <opencv2/core/core.hpp>
-
+#include "PCL_Functions.h"
+#include "VisualizerManager.h"
 
 void App::init() {
-	//// Check all devices on the network
-	//try {
-	//	std::vector<std::pair<std::string, std::string>> device_info = NetworkUtilLibrary::getInstance().listDeviceIDsAndIPsOnLAN();
-	//	std::cout << "Found " << device_info.size() << " devices on the network." << std::endl;
-	//	for (const auto& i : device_info) {
-	//		std::cout << "Found device ID: " << i.first << " with IP address: " << i.second << std::endl;
-	//	}
-	//}
-	//catch (const std::runtime_error& e) {
-	//	std::cerr << "Error: " << e.what() << std::endl;
-	//}
+	// Create femto mega device conncection info
+	std::vector <std::pair<std::string, int>> inputIpAddressAndPorts;
+	std::pair<std::string, int> ip_address_and_port_1("192.168.1.201", 8090);
+	inputIpAddressAndPorts.push_back(ip_address_and_port_1);
+	std::pair<std::string, int> ip_address_and_port_2("192.168.1.202", 8090);
+	inputIpAddressAndPorts.push_back(ip_address_and_port_2);
 
-	
+	_running = fm.init(inputIpAddressAndPorts);
 }
 
 void App::run() {
-	// Create femto mega device conncection info
-	std::vector <std::pair<std::string, int>> input_ip_address_and_ports;
-	std::pair<std::string, int> ip_address_and_port_1("192.168.1.201", 8090);
-	input_ip_address_and_ports.push_back(ip_address_and_port_1);
-	std::pair<std::string, int> ip_address_and_port_2("192.168.1.202", 8090);
-	input_ip_address_and_ports.push_back(ip_address_and_port_2);
+	// Visualizer
+	VisualizerManager vm;
 
-	_running = fm.init(input_ip_address_and_ports);
+	// Registration
+	std::vector<Eigen::Matrix4f> icpResults;
 
-	// start stream
-	if(_running) fm.start();
-	std::this_thread::sleep_for(std::chrono::milliseconds(10000));
-	fm.stop();
-
-	return;
 	// main loop
 	while (_running)
 	{
@@ -53,19 +27,78 @@ void App::run() {
 		cv::TickMeter tm;
 		tm.start();
 		// --------------------------------------------
+		fm.update();
 
-		std::this_thread::sleep_for(std::chrono::milliseconds(100));
+		{
+			// Check running
+			_running = vm.running;
+
+			// Get pointclouds
+			std::vector<pcl::PointCloud<PointType>::Ptr> pointclouds = fm.getPointclouds();
+			if (pointclouds.empty()) continue;
+
+			// Filter
+			float defaultVoxelSize = 0.01f;
+			for (size_t i = 0; i < pointclouds.size(); i++)
+			{
+				PCL_Functions::voxelGridFilter(defaultVoxelSize, pointclouds[i]);
+			}
+
+			// Pre-Transform
+
+
+			// Registration
+			if (pointclouds.size() > 1 && icpResults.empty())
+			{
+				pcl::PointCloud<PointType>::Ptr tgtPcd = pointclouds[0]; // this cloud is base
+				// calc target pointcloud's transfrom
+				for (size_t i = 0; i < pointclouds.size(); i++)
+				{
+					pcl::PointCloud<PointType>::Ptr srcPcd = pointclouds[i];
+					Eigen::Matrix4f icpResult = PCL_Functions::iterativeClosestPoint(tgtPcd, srcPcd);
+					icpResults.push_back(icpResult);
+				}
+
+				vm.registration = true;
+			}
+
+			// Transfrom
+			if (icpResults.size() > 1)
+			{
+				pcl::PointCloud<PointType>::Ptr transformedPcd(new pcl::PointCloud<PointType>);
+				for (size_t i = 1; i < pointclouds.size(); i++)
+				{
+					PCL_Functions::transform(pointclouds[i], icpResults[i]);
+				}
+			}
+
+			//// Plane removal
+			//for (size_t i = 0; i < pointclouds.size(); i++)
+			//{
+			//	PCL_Functions::planeRemoval(pointclouds[i], defaultVoxelSize * 5);
+			//}
+
+
+			// Marge and draw
+			pcl::PointCloud<PointType>::Ptr mergedPcd(new pcl::PointCloud<PointType>);
+			for (size_t i = 0; i < pointclouds.size(); i++)
+			{
+				PCL_Functions::voxelGridFilter(0.03f, pointclouds[i]);
+
+				*mergedPcd += *pointclouds[i];
+			}
+			vm.updateVisualizer(mergedPcd);
+		}
 
 		// --------------------------------------------
 		// print framerate
 		tm.stop();
-		printf("FPS: %f \n", tm.getFPS());
+		//printf("FPS: %f \n", tm.getFPS());
 
 		// wait for key
-		handleKey((char)cv::waitKey(100));
+		handleKey((char)cv::waitKey(1));
 	}
-
-	
+	fm.stop();
 }
 
 // key bind
@@ -74,6 +107,9 @@ void App::handleKey(char key)
 	switch (key) {
 	case 27:
 		_running = false;
+		break;
+	case 'r':
+		
 		break;
 	default:
 		break;
